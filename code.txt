@@ -1,4 +1,4 @@
-workspace "PayID" "Diagrama de Contexto del sistema PayID y sus principales actores y sistemas externos." {
+workspace "PayID" "Diagrama de Contexto, Contenedores y Componentes del sistema PayID." {
 
     model {
         // --- Actores ---
@@ -8,9 +8,6 @@ workspace "PayID" "Diagrama de Contexto del sistema PayID y sus principales acto
         comercio = person "Comercio / Servicio" "Acepta pagos y valida credenciales PayID." "Actor"
         adminPayID = person "Administrador PayID" "Supervisa y administra la plataforma." "Actor"
 
-        // --- Sistema Principal ---
-        payID = softwareSystem "PayID" "Plataforma de identidad digital y pagos." "TargetSystem"
-
         // --- Sistemas Externos ---
         RENIEC = softwareSystem "RENIEC" "Valida la identidad de los usuarios." "ExternalSystemPurple"
         SUNEDU = softwareSystem "SUNEDU" "Valida información universitaria y académica." "ExternalSystemPurple"
@@ -19,32 +16,103 @@ workspace "PayID" "Diagrama de Contexto del sistema PayID y sus principales acto
         sistemaUniversitario = softwareSystem "Sistema Universitario" "Proporciona información de matrícula y condición académica." "ExternalSystemBlue"
         servicioSeguridad = softwareSystem "Servicio de Seguridad" "Detecta fraude y gestiona autenticación." "ExternalSystemBlue"
         servicioNotificaciones = softwareSystem "Servicio de Notificaciones" "Envía mensajes, alertas y códigos de verificación." "ExternalSystemBlue"
-        
-        // --- Nuevo Sistema Externo (Regulador) ---
         sbs = softwareSystem "SBS" "Ente regulador. Supervisa las operaciones financieras e identidad." "ExternalSystemPurple"
 
-        // --- Relaciones (Actores -> PayID) ---
-        estudiante -> payID "Gestiona identidad, credenciales y pagos"
-        padre -> payID "Gestiona pagos y servicios autorizados"
-        adminUniversitario -> payID "Gestiona información académica"
-        comercio -> payID "Acepta pagos y valida credenciales"
-        adminPayID -> payID "Administra y supervisa la plataforma"
+        // --- Sistema Principal (PayID) y sus Contenedores ---
+        payID = softwareSystem "PayID" "Plataforma de identidad digital y pagos." "TargetSystem" {
+            
+            // Frontends
+            mobileApp = container "App Móvil PayID" "Provee acceso a la billetera, pagos e identidad digital." "Flutter" "Mobile"
+            webPortal = container "Portal Web PayID" "Portal para gestión de comercios y administración." "React" "WebBrowser"
+            
+            // Gateway
+            apiGateway = container "API Gateway / BFF" "Enruta peticiones, maneja autenticación inicial y rate limiting." "Kong"
+            
+            // Microservicios (Lógica de Negocio)
+            identidadService = container "Microservicio de Identidad" "Gestiona credenciales, documentos y perfiles de usuario." "Java / Spring Boot"
+            complianceService = container "Microservicio de Regulación (Compliance)" "Genera reportes para auditoría y entes reguladores." "Node.js / NestJS"
+            
+            // Eventos y Datos compartidos
+            eventBus = container "Event Bus (Broker)" "Bus de mensajes para comunicación asíncrona (EDA)." "Apache Kafka" "MessageBus"
+            seguridadVault = container "Bóveda de Datos (Tokenización)" "Cifra y tokeniza información sensible (tarjetas, DNI)." "HashiCorp Vault" "Database"
 
-        // --- Relaciones (PayID -> Sistemas Externos) ---
-        payID -> RENIEC "Valida identidad"
-        payID -> SUNEDU "Valida información académica"
-        payID -> sunat "Consulta información tributaria"
-        payID -> sistemasPago "Procesa operaciones de pago"
-        payID -> sistemaUniversitario "Consulta matrícula y condición académica"
-        payID -> servicioSeguridad "Autentica usuarios y detecta fraude"
-        payID -> servicioNotificaciones "Envía notificaciones y códigos"
-        payID -> sbs "Reporta operaciones y cumple normativa regulatoria"
+            // --- ZOOM: Componentes del Microservicio de Pagos ---
+            pagosService = container "Microservicio de Pagos y Billetera" "Gestiona transacciones, saldos y métodos de pago." "Java / Spring Boot" {
+                pagoController = component "Payment API Controller" "Expone endpoints REST para procesamiento de pagos." "Spring MVC Controller"
+                transaccionService = component "Transaction Core Service" "Lógica central de validación de saldos y reglas de pago." "Spring Bean"
+                eventoPublisher = component "Event Publisher Adapter" "Publica eventos (ej. PagoCompletado) al broker." "Hexagonal Adapter"
+                
+                // Adaptadores Hexagonales (Salida)
+                pasarelaAdapter = component "Payment Gateway Adapter" "Se integra con pasarelas externas aislando la lógica de negocio." "Hexagonal Adapter"
+                sunatAdapter = component "SUNAT Validator Adapter" "Verifica estado de RUC/Comercio previo al pago." "Hexagonal Adapter"
+                pagosRepo = component "Payment Repository" "Capa de acceso a datos de transacciones." "Spring Data JPA"
+            }
+            dbPagos = container "Base de Datos de Pagos" "Almacena historial de transacciones y saldos." "PostgreSQL" "Database"
+        }
+
+        // --- Relaciones: Actores -> Contenedores ---
+        estudiante -> mobileApp "Usa"
+        padre -> mobileApp "Usa"
+        comercio -> mobileApp "Cobra usando"
+        comercio -> webPortal "Gestiona ventas en"
+        adminUniversitario -> webPortal "Gestiona credenciales en"
+        adminPayID -> webPortal "Administra plataforma en"
+
+        // --- Relaciones: Frontends -> API Gateway ---
+        mobileApp -> apiGateway "Realiza peticiones API (JSON/HTTPS)"
+        webPortal -> apiGateway "Realiza peticiones API (JSON/HTTPS)"
+
+        // --- Relaciones: API Gateway -> Microservicios ---
+        apiGateway -> identidadService "Enruta peticiones de identidad"
+        apiGateway -> pagosService "Enruta peticiones de pagos"
+        apiGateway -> complianceService "Enruta peticiones administrativas"
+
+        // --- Relaciones: Microservicios -> Bus de Eventos ---
+        identidadService -> eventBus "Publica/Consume eventos"
+        pagosService -> eventBus "Publica/Consume eventos"
+        complianceService -> eventBus "Consume eventos para reportes"
+
+        // --- Relaciones: Microservicios -> Sistemas Externos (Contenedores) ---
+        apiGateway -> servicioSeguridad "Delega autenticación (OAuth2)"
+        apiGateway -> servicioNotificaciones "Solicita envío de OTPs"
+        identidadService -> RENIEC "Valida DNI (API)"
+        identidadService -> SUNEDU "Valida grados (API)"
+        identidadService -> sistemaUniversitario "Valida matrícula (API)"
+        complianceService -> sbs "Envía reportes de cumplimiento"
+        pagosService -> seguridadVault "Tokeniza/Detokeniza tarjetas"
+        
+        // --- Relaciones Internas del Microservicio de Pagos (Componentes) ---
+        apiGateway -> pagoController "Llama a endpoints de pago"
+        pagoController -> transaccionService "Delega flujo de negocio"
+        transaccionService -> pagosRepo "Lee/Escribe estado"
+        transaccionService -> pasarelaAdapter "Solicita cobro"
+        transaccionService -> sunatAdapter "Valida impuestos/RUC"
+        transaccionService -> eventoPublisher "Notifica resultado"
+        
+        // --- Relaciones Componentes -> Externos/Otros Contenedores ---
+        pagosRepo -> dbPagos "Guarda datos (JDBC)"
+        pasarelaAdapter -> sistemasPago "Procesa transacción (HTTPS)"
+        sunatAdapter -> sunat "Consulta estado tributario (HTTPS)"
+        eventoPublisher -> eventBus "Publica mensaje (Kafka/TCP)"
     }
 
     views {
+        // Vista de Contexto (Nivel 1)
         systemContext payID "Contexto_PayID" {
             include *
             autolayout lr
+        }
+
+        // Vista de Contenedores (Nivel 2)
+        container payID "Contenedores_PayID" {
+            include *
+            autolayout tb
+        }
+
+        // Vista de Componentes (Nivel 3)
+        component pagosService "Componentes_MicroservicioPagos" {
+            include *
+            autolayout tb
         }
 
         styles {
@@ -65,9 +133,28 @@ workspace "PayID" "Diagrama de Contexto del sistema PayID y sus principales acto
                 background #3b82f6
                 color #ffffff
             }
+            element "Container" {
+                background #0ea5e9
+                color #ffffff
+                shape RoundedBox
+            }
+            element "Component" {
+                background #38bdf8
+                color #000000
+                shape RoundedBox
+            }
+            element "Database" {
+                shape Cylinder
+                background #0284c7
+                color #ffffff
+            }
+            element "MessageBus" {
+                shape Pipe
+                background #f59e0b
+                color #ffffff
+            }
             relationship "Relationship" {
                 dashed true
-                style dashed
             }
         }
     }
