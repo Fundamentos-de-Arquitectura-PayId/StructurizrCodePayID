@@ -1,0 +1,74 @@
+workspace "PayID" "Diagrama de Contexto del sistema PayID y sus principales actores y sistemas externos." {
+
+    model {
+        // --- Actores ---
+        estudiante = person "Estudiante" "Gestiona su identidad, credenciales y pagos." "Actor"
+        padre = person "Padre / Apoderado" "Gestiona pagos y servicios autorizados." "Actor"
+        adminUniversitario = person "Administrador Universitario" "Gestiona y valida información académica." "Actor"
+        comercio = person "Comercio / Servicio" "Acepta pagos y valida credenciales PayID." "Actor"
+        adminPayID = person "Administrador PayID" "Supervisa y administra la plataforma." "Actor"
+
+        // --- Sistema Principal ---
+        payID = softwareSystem "PayID" "Plataforma de identidad digital y pagos." "TargetSystem"
+
+        // --- Sistemas Externos ---
+        RENIEC = softwareSystem "RENIEC" "Valida la identidad de los usuarios." "ExternalSystemPurple"
+        SUNEDU = softwareSystem "SUNEDU" "Valida información universitaria y académica." "ExternalSystemPurple"
+        sunat = softwareSystem "SUNAT" "Valida información tributaria y RUC." "ExternalSystemPurple"
+        sistemasPago = softwareSystem "Sistemas de Pago" "Procesa transferencias, tarjetas y billeteras digitales." "ExternalSystemBlue"
+        sistemaUniversitario = softwareSystem "Sistema Universitario" "Proporciona información de matrícula y condición académica." "ExternalSystemBlue"
+        servicioSeguridad = softwareSystem "Servicio de Seguridad" "Detecta fraude y gestiona autenticación." "ExternalSystemBlue"
+        servicioNotificaciones = softwareSystem "Servicio de Notificaciones" "Envía mensajes, alertas y códigos de verificación." "ExternalSystemBlue"
+        
+        // --- Nuevo Sistema Externo (Regulador) ---
+        sbs = softwareSystem "SBS" "Ente regulador. Supervisa las operaciones financieras e identidad." "ExternalSystemPurple"
+
+        // --- Relaciones (Actores -> PayID) ---
+        estudiante -> payID "Gestiona identidad, credenciales y pagos"
+        padre -> payID "Gestiona pagos y servicios autorizados"
+        adminUniversitario -> payID "Gestiona información académica"
+        comercio -> payID "Acepta pagos y valida credenciales"
+        adminPayID -> payID "Administra y supervisa la plataforma"
+
+        // --- Relaciones (PayID -> Sistemas Externos) ---
+        payID -> RENIEC "Valida identidad"
+        payID -> SUNEDU "Valida información académica"
+        payID -> sunat "Consulta información tributaria"
+        payID -> sistemasPago "Procesa operaciones de pago"
+        payID -> sistemaUniversitario "Consulta matrícula y condición académica"
+        payID -> servicioSeguridad "Autentica usuarios y detecta fraude"
+        payID -> servicioNotificaciones "Envía notificaciones y códigos"
+        payID -> sbs "Reporta operaciones y cumple normativa regulatoria"
+    }
+
+    views {
+        systemContext payID "Contexto_PayID" {
+            include *
+            autolayout lr
+        }
+
+        styles {
+            element "Actor" {
+                background #22c55e
+                color #ffffff
+                shape Person
+            }
+            element "TargetSystem" {
+                background #0284c7
+                color #ffffff
+            }
+            element "ExternalSystemPurple" {
+                background #8b5cf6
+                color #ffffff
+            }
+            element "ExternalSystemBlue" {
+                background #3b82f6
+                color #ffffff
+            }
+            relationship "Relationship" {
+                dashed true
+                style dashed
+            }
+        }
+    }
+}
